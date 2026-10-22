@@ -1,0 +1,79 @@
+[
+  {
+    "level": 1,
+    "name": "对话泡泡",
+    "filename": "01_dialog.png",
+    "pixel_size": 512,
+    "source": "evolution reference board cropped and transparent-masked; verify before shipping"
+  },
+  {
+    "level": 2,
+    "name": "迷你龙娘",
+    "filename": "02_mini.png",
+    "pixel_size": 512,
+    "source": "evolution reference board cropped and transparent-masked; verify before shipping"
+  },
+  {
+    "level": 3,
+    "name": "呆萌龙娘",
+    "filename": "03_cuddly.png",
+    "pixel_size": 512,
+    "source": "evolution reference board cropped and transparent-masked; verify before shipping"
+  },
+  {
+    "level": 4,
+    "name": "摸鱼龙娘",
+    "filename": "04_fishing.png",
+    "pixel_size": 512,
+    "source": "evolution reference board cropped and transparent-masked; verify before shipping"
+  },
+  {
+    "level": 5,
+    "name": "思考龙娘",
+    "filename": "05_thinking.png",
+    "pixel_size": 512,
+    "source": "evolution reference board cropped and transparent-masked; verify before shipping"
+  },
+  {
+    "level": 6,
+    "name": "别催龙娘",
+    "filename": "06_impatient.png",
+    "pixel_size": 512,
+    "source": "evolution reference board cropped and transparent-masked; verify before shipping"
+  },
+  {
+    "level": 7,
+    "name": "工作龙娘",
+    "filename": "07_work.png",
+    "pixel_size": 512,
+    "source": "evolution reference board cropped and transparent-masked; verify before shipping"
+  },
+  {
+    "level": 8,
+    "name": "分析龙娘",
+    "filename": "08_analysis.png",
+    "pixel_size": 512,
+    "source": "evolution reference board cropped and transparent-masked; verify before shipping"
+  },
+  {
+    "level": 9,
+    "name": "老师龙娘",
+    "filename": "09_teacher.png",
+    "pixel_size": 512,
+    "source": "evolution reference board cropped and transparent-masked; verify before shipping"
+  },
+  {
+    "level": 10,
+    "name": "华丽龙娘",
+    "filename": "10_elegant.png",
+    "pixel_size": 512,
+    "source": "evolution reference board cropped and transparent-masked; verify before shipping"
+  },
+  {
+    "level": 11,
+    "name": "伟大的GPT龙娘大人",
+    "filename": "11_great.png",
+    "pixel_size": 512,
+    "source": "evolution reference board cropped and transparent-masked; verify before shipping"
+  }
+]

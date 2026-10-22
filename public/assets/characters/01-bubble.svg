@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256" role="img" aria-labelledby="title"><title id="title">对话泡泡</title><defs>
+      <linearGradient id="base" x1="0" y1="0" x2="0.7" y2="1"><stop stop-color="#FFFEF8"/><stop offset="1" stop-color="#E9F1DC"/></linearGradient>
+      <linearGradient id="hair" x1="0" y1="0" x2="0.4" y2="1"><stop stop-color="#FFFFFF"/><stop offset="1" stop-color="#E6DEEC"/></linearGradient>
+      <linearGradient id="iris" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#75538C"/><stop offset="1" stop-color="#BD98DF"/></linearGradient>
+      <linearGradient id="gold" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#FFF0B5"/><stop offset="1" stop-color="#D2B46C"/></linearGradient>
+    </defs><g stroke="#65546F" stroke-linecap="round" stroke-linejoin="round"><circle cx="128" cy="128" r="120" fill="url(#base)" stroke="#8AA96F" stroke-width="3.5"/><path d="M32 100A100 100 0 0 1 102 32" fill="none" stroke="white" stroke-width="5" stroke-linecap="round" opacity=".75"/>
+        <path d="M167 169q30 31 43 5q-18 5-22-12" fill="#B9A0CD" stroke-width="4" stroke-linejoin="round"/>
+        <path d="M67 91q-18-15-8-37q8 17 27 20m83 0q19-3 27-20q10 22-8 37" fill="#C9B7DF" stroke-width="4"/>
+        <path d="M63 78q65-32 130 0q26 49-3 92q-34 25-72 15l-38 22 6-30q-45-25-23-99z" fill="#FFFDF7" stroke-width="4"/>
+        <path d="M76 88q18-10 33-10" fill="none" stroke="#E3D9EC" stroke-width="4" stroke-linecap="round"/>
+        <ellipse cx="97" cy="128" rx="9" ry="12" fill="#9371AE" stroke="none"/><ellipse cx="159" cy="128" rx="9" ry="12" fill="#9371AE" stroke="none"/>
+        <circle cx="94" cy="123" r="3" fill="white" stroke="none"/><circle cx="156" cy="123" r="3" fill="white" stroke="none"/>
+        <ellipse cx="80" cy="147" rx="12" ry="6" fill="#F6D0CB" stroke="none"/><ellipse cx="177" cy="147" rx="12" ry="6" fill="#F6D0CB" stroke="none"/>
+        <path d="M115 145q13 15 26 0" fill="none" stroke-width="4" stroke-linecap="round"/>
+        <path d="M208 92 Q210 100 218 102 Q210 104 208 112 Q206 104 198 102 Q206 100 208 92Z" fill="#C2CE9C" stroke="none"/><path d="M47 151 Q49 157 55 159 Q49 161 47 167 Q45 161 39 159 Q45 157 47 151Z" fill="#CEBADE" stroke="none"/></g></svg>
