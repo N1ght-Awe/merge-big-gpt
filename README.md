@@ -2,6 +2,9 @@
 
 把小小的灵感，合成伟大的 GPT 龙娘。基于 **Vite + TypeScript + Matter.js** 的物理合成网页小游戏。无需账号、后端或数据库；角色与音效均不依赖外部服务。
 
+- 在线试玩：<https://n1ght-awe.github.io/merge-big-gpt/>
+- 源码仓库：<https://github.com/N1ght-Awe/merge-big-gpt>
+
 ## 启动
 
 在本目录打开终端，使用 Node.js 22.12+（或 20.19+）：
