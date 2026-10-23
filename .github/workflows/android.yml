@@ -46,17 +46,14 @@ jobs:
         id: signing
         env:
           ANDROID_SIGNING_PASSWORD: ${{ secrets.ANDROID_SIGNING_PASSWORD }}
+          ANDROID_KEYSTORE_GPG_BASE64: ${{ secrets.ANDROID_KEYSTORE_GPG_BASE64 }}
         run: |
           set -euo pipefail
           test -n "$ANDROID_SIGNING_PASSWORD"
+          test -n "$ANDROID_KEYSTORE_GPG_BASE64"
           mkdir -p release
-          if [ -f android/signing/release.keystore.gpg ]; then
-            printf '%s' "$ANDROID_SIGNING_PASSWORD" | gpg --batch --yes --pinentry-mode loopback --passphrase-fd 0 --output "$RUNNER_TEMP/merge-gpt.keystore" --decrypt android/signing/release.keystore.gpg
-            cp android/signing/release.keystore.gpg release/release.keystore.gpg
-          else
-            keytool -genkeypair -keystore "$RUNNER_TEMP/merge-gpt.keystore" -storetype PKCS12 -storepass:env ANDROID_SIGNING_PASSWORD -keypass:env ANDROID_SIGNING_PASSWORD -alias merge-gpt -keyalg RSA -keysize 3072 -validity 10000 -dname 'CN=Merge GPT, O=N1ght-Awe'
-            printf '%s' "$ANDROID_SIGNING_PASSWORD" | gpg --batch --yes --pinentry-mode loopback --passphrase-fd 0 --symmetric --cipher-algo AES256 --output release/release.keystore.gpg "$RUNNER_TEMP/merge-gpt.keystore"
-          fi
+          printf '%s' "$ANDROID_KEYSTORE_GPG_BASE64" | base64 --decode > "$RUNNER_TEMP/release.keystore.gpg"
+          printf '%s' "$ANDROID_SIGNING_PASSWORD" | gpg --batch --yes --pinentry-mode loopback --passphrase-fd 0 --output "$RUNNER_TEMP/merge-gpt.keystore" --decrypt "$RUNNER_TEMP/release.keystore.gpg"
       - name: Build and verify signed APK
         env:
           ANDROID_SIGNING_PASSWORD: ${{ secrets.ANDROID_SIGNING_PASSWORD }}
@@ -70,6 +67,9 @@ jobs:
           cp android/app/build/outputs/apk/release/app-release.apk release/merge-big-gpt-android.apk
           SIGNER=$(find "$ANDROID_HOME/build-tools" -name apksigner | sort -V | tail -1)
           "$SIGNER" verify --verbose --print-certs release/merge-big-gpt-android.apk > release/signature.txt
+          if [ -f android/signing/certificate-sha256.txt ]; then
+            grep -F "certificate SHA-256 digest: $(cat android/signing/certificate-sha256.txt)" release/signature.txt
+          fi
           sha256sum release/merge-big-gpt-android.apk > release/SHA256SUMS.txt
       - uses: actions/upload-artifact@v4
         if: always() && steps.signing.outcome == 'success'

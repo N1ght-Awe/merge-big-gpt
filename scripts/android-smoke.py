@@ -9,6 +9,7 @@ from pathlib import Path
 PACKAGE = 'io.github.n1ghtawe.pocketgames'
 OUT = Path('output/android-smoke')
 OUT.mkdir(parents=True, exist_ok=True)
+launcher_dialogs = 0
 
 
 def adb(*args, binary=False):
@@ -20,12 +21,25 @@ def screen(name):
 
 
 def wait_node(label, name):
+    global launcher_dialogs
     last = ''
     for _ in range(20):
         adb('shell', 'uiautomator', 'dump', '/sdcard/window.xml')
         last = adb('shell', 'cat', '/sdcard/window.xml')
         (OUT / f'{name}.xml').write_text(last, encoding='utf-8')
         root = ET.fromstring(last)
+        # A newly booted CI image can show a launcher ANR over another app.
+        # Dismiss only that specific system dialog; never hide a game ANR.
+        titles = [n.get('text', '') for n in root.iter('node') if n.get('resource-id') == 'android:id/alertTitle']
+        if any(t.startswith('Pixel Launcher') and "isn't responding" in t for t in titles):
+            launcher_dialogs += 1
+            screen(f'launcher-dialog-{launcher_dialogs}')
+            close = next(n for n in root.iter('node') if n.get('resource-id') == 'android:id/aerr_close')
+            tap(close)
+            time.sleep(2)
+            continue
+        if any("isn't responding" in t for t in titles):
+            raise AssertionError(f'Application ANR: {titles}')
         for node in root.iter('node'):
             if label in node.get('text', '') or label in node.get('content-desc', ''):
                 return node
@@ -66,6 +80,7 @@ try:
     (OUT / 'result.json').write_text(json.dumps({
         'package': PACKAGE, 'airplaneMode': True, 'firstLaunchOffline': True,
         'dropAccepted': True, 'processDeathRestorePaused': True, 'resumeOffline': True,
+        'launcherDialogsDismissed': launcher_dialogs,
     }, indent=2), encoding='utf-8')
 finally:
     screen('last-frame')

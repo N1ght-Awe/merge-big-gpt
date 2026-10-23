@@ -21,7 +21,7 @@ cd android
 
 GitHub Actions 的 `Android offline APK` 工作流运行测试、打包签名 APK，再用 Android 模拟器断网验证首次启动、投放、退出进程与恢复。构建产物 `android-release` 包含 APK、SHA-256 校验值和签名证书摘要；`android-offline-check` 包含截图与结果。
 
-正式签名密码存放于仓库 Actions secret `ANDROID_SIGNING_PASSWORD`，私钥只以加密文件 `android/signing/release.keystore.gpg` 保存在源码。首次构建的加密文件必须取回并提交，之后各版本复用同一签名；不要重新生成或覆盖签名密码。应妥善备份密码与加密文件，否则无法发布可覆盖安装的更新。
+正式签名密码存放于仓库 Actions secret `ANDROID_SIGNING_PASSWORD`，私钥经 GPG 加密后以 Base64 格式存放于另一个 Actions secret `ANDROID_KEYSTORE_GPG_BASE64`。源码只保存公开证书的 SHA-256 指纹，构建时验证签名一致。不要重新生成或覆盖签名凭据，应妥善保管本机 `.private/` 下的密码与加密备份，否则无法发布可覆盖安装的更新。
 
 工作流以 `1000 + GITHUB_RUN_NUMBER` 作为递增版本号。通过检查后，将 APK 发布到 GitHub Releases；签名私钥不作为公开下载附件发布。
 

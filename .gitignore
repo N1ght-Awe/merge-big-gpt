@@ -5,4 +5,5 @@ output/
 .private/
 *.jks
 *.keystore
+*.keystore.gpg
 .verify/
