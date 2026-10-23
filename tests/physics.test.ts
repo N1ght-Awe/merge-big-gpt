@@ -211,7 +211,6 @@ test('pause freezes simulation and cooldown; reset removes all old entities', ()
   assert.equal(game.snapshot().drops, 0);
   assert.equal(game.snapshot().merges, 0);
   assert.equal(game.snapshot().time, 0);
-  assert.equal(game.snapshot().warning, 0);
   assert.equal(game.snapshot().canDrop, true);
   assertWorldSync(game);
   assert.ok(game.drop());
@@ -233,7 +232,6 @@ test('normal new drops cross the danger line without false game over', () => {
     assert.equal(game.snapshot().status, 'playing');
     advance(game, 5000);
     assert.equal(game.snapshot().status, 'playing');
-    assert.equal(game.snapshot().warning, 0);
     assert.equal([...game.pieces.values()][0].overflowEligible, true);
     game.destroy();
   }
@@ -253,7 +251,6 @@ test('all four drop levels cross the line without even a transient warning', () 
         crossed = true;
         assert.equal(piece.overflowEligible, false, 'crossing alone is not stack contact');
       }
-      assert.equal(game.snapshot().warning, 0, `level=${piece.level}, frame=${frame}`);
       assert.equal(game.snapshot().status, 'playing');
     }
     assert.ok(crossed, 'test must actually sample the falling circle crossing the line');
@@ -275,7 +272,6 @@ test('two incoming balls merging across the line remain exempt until they land',
   assert.equal(game.snapshot().merges, 1);
   const merged = [...game.pieces.values()][0];
   assert.equal(merged.overflowEligible, false);
-  assert.equal(game.snapshot().warning, 0);
   game.engine.gravity.y = 1.15;
   advance(game, 5000);
   assert.equal(merged.overflowEligible, true);
@@ -296,7 +292,6 @@ test('a new drop blocked above the line by the stack loses on contact, without a
   assert.ok(game.snapshot().time < 1000);
   assert.equal(piece.overflowEligible, true);
   assert.ok(piece.body.position.y + LEVELS[piece.level].radius < GAME.deadline);
-  assert.equal(game.snapshot().warning, 1);
   assert.equal(game.drop(), false);
   game.resume();
   advance(game, 5000);
@@ -315,7 +310,6 @@ test('partial overflow is safe indefinitely at every level, including exact bott
       Matter.Body.setPosition(piece.body, { x: 220, y });
       advance(game, 5000);
       assert.equal(game.snapshot().status, 'playing', `level=${level}, y=${y}`);
-      assert.ok(game.snapshot().warning > 0);
     }
     // Even a small strictly complete crossing loses on the next physics step.
     Matter.Body.setPosition(piece.body, { x: 220, y: GAME.deadline - r - 0.01 });
@@ -326,7 +320,7 @@ test('partial overflow is safe indefinitely at every level, including exact bott
   }
 });
 
-test('warning follows geometry and recedes immediately when the circle moves down', () => {
+test('partial crossing followed by descent does not cause delayed failure', () => {
   const game = new PhysicsGame();
   const r = LEVELS[0].radius;
   const piece = game.spawn(0, 220, GAME.deadline + r + 20);
@@ -335,12 +329,10 @@ test('warning follows geometry and recedes immediately when the circle moves dow
   Matter.Body.setPosition(piece.body, { x: 220, y: GAME.deadline });
   game.step(FRAME);
   assert.equal(game.snapshot().status, 'playing');
-  assert.equal(game.snapshot().warning, 0.5);
   advance(game, 10000);
-  assert.equal(game.snapshot().warning, 0.5, 'waiting cannot increase danger');
+  assert.equal(game.snapshot().status, 'playing');
   Matter.Body.setPosition(piece.body, { x: 220, y: GAME.deadline + r + 20 });
   game.step(FRAME);
-  assert.equal(game.snapshot().warning, 0);
   game.destroy();
 });
 
@@ -354,7 +346,6 @@ test('two airborne newcomers or a side wall cannot arm entry failure', () => {
   advance(game, 6000);
   assert.equal(game.snapshot().status, 'playing');
   assert.ok([a, b, wall].every(piece => !piece.overflowEligible));
-  assert.equal(game.snapshot().warning, 0);
   game.destroy();
 });
 

@@ -23,7 +23,6 @@ export class PhysicsGame {
   private maxLevel = 0;
   private drops = 0;
   private merges = 0;
-  private warning = 0;
   private time = 0;
   private aimX: number = GAME.width / 2;
   private lastDrop = -Infinity;
@@ -61,7 +60,6 @@ export class PhysicsGame {
       maxLevel: this.maxLevel,
       drops: this.drops,
       merges: this.merges,
-      warning: this.warning,
       canDrop: !this.destroyed && this.status === 'playing'
         && this.time - this.lastDrop >= GAME.dropCooldown,
       time: this.time,
@@ -177,7 +175,6 @@ export class PhysicsGame {
     this.maxLevel = 0;
     this.drops = 0;
     this.merges = 0;
-    this.warning = 0;
     this.time = 0;
     this.lastDrop = -Infinity;
     this.lastMerge = -Infinity;
@@ -221,7 +218,7 @@ export class PhysicsGame {
 
   private updateOverflowEligibility(): void {
     // Fresh drops stay exempt throughout their fall, including line crossing.
-    // Only touching the floor or an existing stack arms warning and failure.
+    // Only touching the floor or an existing stack arms failure.
     // Walls cannot arm a drop, and two airborne newcomers cannot arm each other.
     const contacts = new Map<number, number[]>();
     for (const [a, b] of this.pendingContacts) {
@@ -289,18 +286,14 @@ export class PhysicsGame {
   }
 
   private checkOverflow(): void {
-    this.warning = 0;
     for (const piece of this.pieces.values()) {
       if (!piece.overflowEligible) continue;
       const radius = LEVELS[piece.level].radius;
-      const top = piece.body.position.y - radius;
       const bottom = piece.body.position.y + radius;
-      this.warning = Math.max(this.warning, Math.max(0, Math.min(1, (GAME.deadline - top) / (2 * radius))));
       // A tangent circle is still safe. Only a whole circle strictly above the
       // line loses, immediately, with no entry or overflow countdown.
       if (bottom < GAME.deadline) {
         this.status = 'gameover';
-        this.warning = 1;
         this.pendingEvents.push({ type: 'gameover' });
         return;
       }

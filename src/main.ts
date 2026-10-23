@@ -155,9 +155,7 @@ function render(state: GameState): void {
     muteButton.title = state.muted ? '开启声音' : '关闭声音';
     previousMute = state.muted;
   }
-  const warning = state.warning > 0;
-  $('#canvas-shell').classList.toggle('is-warning', warning);
-  const statusLabel = state.status === 'paused' ? '休息一下，灵感不跑' : state.status === 'gameover' ? '灵感需要重新整理' : warning ? '小心，上下文快满啦' : state.canDrop ? '灵感正在酝酿' : '正在接住小灵感';
+  const statusLabel = state.status === 'paused' ? '休息一下，灵感不跑' : state.status === 'gameover' ? '灵感需要重新整理' : state.canDrop ? '灵感正在酝酿' : '正在接住小灵感';
   if (boardStatus.textContent !== statusLabel) boardStatus.textContent = statusLabel;
   if (state.status !== previousStatus) {
     previousStatus = state.status;

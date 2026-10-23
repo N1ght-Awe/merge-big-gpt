@@ -21,8 +21,6 @@ export interface PhysicsState {
   maxLevel: number;
   drops: number;
   merges: number;
-  /** Fraction of the most exposed eligible circle above the line; never a timer. */
-  warning: number;
   canDrop: boolean;
   time: number;
   aimX: number;

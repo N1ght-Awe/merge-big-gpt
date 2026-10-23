@@ -240,7 +240,7 @@ export class Game {
   private notify() {
     const state = this.snapshot();
     // Physics time and pointer position do not require rebuilding the HTML UI.
-    const key = JSON.stringify({ ...state, time: 0, aimX: 0, warning: Math.round(state.warning * 20) / 20 });
+    const key = JSON.stringify({ ...state, time: 0, aimX: 0 });
     if (key !== this.lastNotify) {
       this.lastNotify = key;
       this.onChange(state);
@@ -583,23 +583,13 @@ export class Game {
 
     ctx.save();
     ctx.setLineDash([4, 7]);
-    ctx.strokeStyle = state.warning > 0 ? '#de8d9b' : '#cbb1d4';
+    ctx.strokeStyle = '#cbb1d4';
     ctx.lineWidth = 1.5;
     ctx.beginPath();
     ctx.moveTo(GAME.wall + 10, GAME.deadline);
     ctx.lineTo(GAME.width - GAME.wall - 10, GAME.deadline);
     ctx.stroke();
     ctx.restore();
-    ctx.font = '12px "Microsoft YaHei", sans-serif';
-    ctx.textAlign = 'left';
-    ctx.fillStyle = state.warning > 0 ? '#a74860' : '#867091';
-    ctx.fillText(state.warning > 0 ? '整颗越线才判负' : '上下文警戒线', 24, GAME.deadline - 10);
-    if (state.warning > 0) {
-      ctx.fillStyle = `rgba(227, 129, 143, ${0.035 + state.warning * 0.07})`;
-      ctx.fillRect(0, GAME.deadline, GAME.width, 60);
-      ctx.fillStyle = '#d89299';
-      ctx.fillRect(20, GAME.deadline + 8, (GAME.width - 40) * state.warning, 3);
-    }
 
     if (this.physics.pieces.size === 0 && state.drops === 0) {
       ctx.save();
