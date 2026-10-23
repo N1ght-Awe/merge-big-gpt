@@ -32,6 +32,7 @@ export class PhysicsGame {
   private destroyed = false;
   private pendingPairs = new Map<string, readonly [number, number]>();
   private pendingContacts: Array<readonly [number, number]> = [];
+  private pendingFloorContacts = new Set<number>();
   private pendingEvents: PhysicsEvent[] = [];
 
   constructor(
@@ -77,6 +78,7 @@ export class PhysicsGame {
     if (!this.snapshot().canDrop) return false;
     const level = this.currentLevel;
     const piece = this.spawn(level, this.aimX, GAME.spawnY);
+    piece.overflowEligible = false;
     this.lastDrop = this.time;
     this.drops += 1;
     this.currentLevel = this.nextLevel;
@@ -139,6 +141,7 @@ export class PhysicsGame {
       this.time += dt;
       if (this.time - this.lastMerge > GAME.comboWindow) this.combo = 0;
       this.pendingContacts.length = 0;
+      this.pendingFloorContacts.clear();
       MatterEngine.update(this.engine, dt);
       this.updateOverflowEligibility();
       this.commitMerges();
@@ -161,6 +164,7 @@ export class PhysicsGame {
     if (this.destroyed) return;
     this.pendingPairs.clear();
     this.pendingContacts.length = 0;
+    this.pendingFloorContacts.clear();
     this.pendingEvents.length = 0;
     this.pieces.clear();
     Composite.clear(this.engine.world, false);
@@ -190,6 +194,7 @@ export class PhysicsGame {
     Events.off(this.engine, 'collisionActive', this.collectCollisions);
     this.pendingPairs.clear();
     this.pendingContacts.length = 0;
+    this.pendingFloorContacts.clear();
     this.pendingEvents.length = 0;
     this.pieces.clear();
     Composite.clear(this.engine.world, false);
@@ -202,6 +207,8 @@ export class PhysicsGame {
     for (const pair of event.pairs) {
       const first = this.pieces.get(pair.bodyA.id);
       const second = this.pieces.get(pair.bodyB.id);
+      if (first && pair.bodyB.label === 'floor') this.pendingFloorContacts.add(first.body.id);
+      if (second && pair.bodyA.label === 'floor') this.pendingFloorContacts.add(second.body.id);
       if (!first || !second) continue;
       this.pendingContacts.push([first.body.id, second.body.id]);
       if (first.level !== second.level
@@ -213,7 +220,8 @@ export class PhysicsGame {
   };
 
   private updateOverflowEligibility(): void {
-    // Fresh drops start above the line. Arm them by geometry/contact, not age.
+    // Fresh drops stay exempt throughout their fall, including line crossing.
+    // Only touching the floor or an existing stack arms warning and failure.
     // Walls cannot arm a drop, and two airborne newcomers cannot arm each other.
     const contacts = new Map<number, number[]>();
     for (const [a, b] of this.pendingContacts) {
@@ -224,7 +232,7 @@ export class PhysicsGame {
     }
     const eligible: number[] = [];
     for (const piece of this.pieces.values()) {
-      if (piece.body.position.y + LEVELS[piece.level].radius >= GAME.deadline) {
+      if (this.pendingFloorContacts.has(piece.body.id)) {
         piece.overflowEligible = true;
       }
       if (piece.overflowEligible) eligible.push(piece.body.id);
@@ -266,7 +274,7 @@ export class PhysicsGame {
       // Merging does not turn an existing stack piece back into a fresh drop.
       // The resulting circle is checked after the complete merge transaction.
       merged.bornAt = Math.min(a.bornAt, b.bornAt);
-      merged.overflowEligible = a.overflowEligible || b.overflowEligible || merged.overflowEligible;
+      merged.overflowEligible = a.overflowEligible || b.overflowEligible;
       this.combo = this.time - this.lastMerge <= GAME.comboWindow ? this.combo + 1 : 1;
       this.lastMerge = this.time;
       const base = LEVELS[level].score;

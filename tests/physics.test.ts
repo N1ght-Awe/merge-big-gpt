@@ -239,6 +239,50 @@ test('normal new drops cross the danger line without false game over', () => {
   }
 });
 
+test('all four drop levels cross the line without even a transient warning', () => {
+  for (const value of [0, 0.6, 0.8, 0.99]) {
+    const game = new PhysicsGame(() => {}, () => value);
+    game.drop();
+    const piece = [...game.pieces.values()][0];
+    const r = LEVELS[piece.level].radius;
+    let crossed = false;
+    for (let frame = 0; frame < 180; frame++) {
+      game.step(FRAME);
+      const y = piece.body.position.y;
+      if (y - r < GAME.deadline && y + r > GAME.deadline) {
+        crossed = true;
+        assert.equal(piece.overflowEligible, false, 'crossing alone is not stack contact');
+      }
+      assert.equal(game.snapshot().warning, 0, `level=${piece.level}, frame=${frame}`);
+      assert.equal(game.snapshot().status, 'playing');
+    }
+    assert.ok(crossed, 'test must actually sample the falling circle crossing the line');
+    assert.equal(piece.overflowEligible, true, 'floor contact eventually arms the settled piece');
+    game.destroy();
+  }
+});
+
+test('two incoming balls merging across the line remain exempt until they land', () => {
+  const game = new PhysicsGame(() => {}, () => 0);
+  game.engine.gravity.y = 0;
+  game.drop();
+  advance(game, GAME.dropCooldown + FRAME);
+  game.drop();
+  const [a, b] = [...game.pieces.values()];
+  Matter.Body.setPosition(a.body, { x: 202, y: GAME.deadline });
+  Matter.Body.setPosition(b.body, { x: 238, y: GAME.deadline });
+  game.step(FRAME);
+  assert.equal(game.snapshot().merges, 1);
+  const merged = [...game.pieces.values()][0];
+  assert.equal(merged.overflowEligible, false);
+  assert.equal(game.snapshot().warning, 0);
+  game.engine.gravity.y = 1.15;
+  advance(game, 5000);
+  assert.equal(merged.overflowEligible, true);
+  assert.equal(game.snapshot().status, 'playing');
+  game.destroy();
+});
+
 test('a new drop blocked above the line by the stack loses on contact, without a timer', () => {
   const events: PhysicsEvent[] = [];
   const game = new PhysicsGame((event) => events.push(event), () => 0);

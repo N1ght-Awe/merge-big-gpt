@@ -35,7 +35,7 @@ export interface GamePiece {
   body: Body;
   level: number;
   bornAt: number;
-  /** Has reached the play area or contacted an eligible piece in the stack. */
+  /** Has contacted the floor/stack; airborne drops do not warn when crossing the line. */
   overflowEligible: boolean;
 }
 export type PhysicsEvent =
