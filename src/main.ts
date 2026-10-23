@@ -2,6 +2,8 @@ import './style.css';
 import { LEVELS } from './config';
 import { Game } from './game';
 import type { GameState, PhysicsEvent } from './types';
+import { Capacitor, type PluginListenerHandle } from '@capacitor/core';
+import { App as NativeApp } from '@capacitor/app';
 
 const icons = {
   spark: '<path d="m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5Z"/>',
@@ -80,7 +82,7 @@ app.innerHTML = `
         </div>
       </div>
     </main>
-    <footer class="site-footer"><span class="keyboard-tip"><kbd>←</kbd><kbd>→</kbd> 瞄准 <span>·</span> <kbd>空格</kbd> 投放 <span>·</span> <kbd>P</kbd> 暂停</span><span class="save-note">${icon('heart')} 最高分自动保存在这里</span></footer>
+    <footer class="site-footer"><span class="keyboard-tip"><kbd>←</kbd><kbd>→</kbd> 瞄准 <span>·</span> <kbd>空格</kbd> 投放 <span>·</span> <kbd>P</kbd> 暂停</span><span class="save-note">${icon('heart')} 本局进度与最高分自动保存</span></footer>
   </div>
   <dialog id="info-dialog" aria-labelledby="dialog-title"><div class="dialog-content" id="dialog-content"></div></dialog>
 `;
@@ -241,7 +243,7 @@ dialog.addEventListener('click', (event) => {
 dialog.addEventListener('keydown', (event) => event.stopPropagation());
 
 $('#open-help').addEventListener('click', () => {
-  openDialog(`<span class="dialog-kicker">糖果屋游玩指南</span><h2 id="dialog-title">碰一碰，就有新灵感</h2><p class="dialog-lead">玩法很简单，龙娘很可爱。</p><ol class="help-steps"><li><span>01</span><div><h3>找个好位置，轻轻放下</h3><p>电脑上移动鼠标瞄准，点击投放。手机上拖动瞄准，松手投放。也可用 ← → 或 A / D 瞄准、空格投放。</p></div></li><li><span>02</span><div><h3>相同的龙娘，会一起长大</h3><p>两个相同等级碰到一起，就会合成为下一级，获得灵感值。连续合成会触发 Combo 和更欢快的音效。</p></div></li><li><span>03</span><div><h3>留一点空间，给下一颗灵感</h3><p>球的最下沿也高于警戒线时，才会判负；压线、部分越线都允许，不设倒计时。新球自由下落、经过警戒线时不警报也不判负；接触地面或已有堆积后才开始判定。最终目标是合出第 11 级「伟大的 GPT 龙娘大人」！</p></div></li></ol><div class="help-note">${icon('heart')}按 P 可暂停。切换页面时会自动暂停，回来后点击继续。最高分和声音设置保存在此浏览器。</div><button class="primary-button dialog-action" id="help-done">明白了，开始碰撞 ${icon('arrow')}</button>`);
+  openDialog(`<span class="dialog-kicker">糖果屋游玩指南</span><h2 id="dialog-title">碰一碰，就有新灵感</h2><p class="dialog-lead">玩法很简单，龙娘很可爱。</p><ol class="help-steps"><li><span>01</span><div><h3>找个好位置，轻轻放下</h3><p>电脑上移动鼠标瞄准，点击投放。手机上拖动瞄准，松手投放。也可用 ← → 或 A / D 瞄准、空格投放。</p></div></li><li><span>02</span><div><h3>相同的龙娘，会一起长大</h3><p>两个相同等级碰到一起，就会合成为下一级，获得灵感值。连续合成会触发 Combo 和更欢快的音效。</p></div></li><li><span>03</span><div><h3>留一点空间，给下一颗灵感</h3><p>球的最下沿也高于警戒线时，才会判负；压线、部分越线都允许，不设倒计时。新球自由下落、经过警戒线时不警报也不判负；接触地面或已有堆积后才开始判定。最终目标是合出第 11 级「伟大的 GPT 龙娘大人」！</p></div></li></ol><div class="help-note">${icon('heart')}按 P 可暂停。切换页面时会自动暂停，回来后点击继续。本局进度、最高分和声音设置保存在本机；重新打开后点击继续即可。</div><button class="primary-button dialog-action" id="help-done">明白了，开始碰撞 ${icon('arrow')}</button>`);
   $('#help-done').addEventListener('click', closeDialog);
 });
 
@@ -274,3 +276,20 @@ window.addEventListener('pagehide', () => {
   if (toastTimer) clearTimeout(toastTimer);
 });
 if (import.meta.hot) import.meta.hot.dispose(() => game.destroy());
+
+const nativeListeners: PluginListenerHandle[] = [];
+if (Capacitor.isNativePlatform()) {
+  void (async () => {
+    nativeListeners.push(await NativeApp.addListener('appStateChange', ({ isActive }) => {
+      if (!isActive) game.pause();
+    }));
+    nativeListeners.push(await NativeApp.addListener('backButton', () => {
+      if (dialog.open) { dialog.close(); return; }
+      game.pause();
+      void NativeApp.exitApp();
+    }));
+  })();
+}
+if (import.meta.hot) import.meta.hot.dispose(() => {
+  for (const listener of nativeListeners) void listener.remove();
+});

@@ -1,0 +1,108 @@
+name: Android offline APK
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'src/**'
+      - 'tests/**'
+      - 'public/assets/characters/repaired-v1/**'
+      - 'android/app/**'
+      - 'android/*.gradle'
+      - 'android/gradle/**'
+      - 'build/**'
+      - 'scripts/android-smoke.py'
+      - 'package*.json'
+      - 'capacitor.config.ts'
+      - 'vite.config.ts'
+      - '.github/workflows/android.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-release
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - run: npm ci
+      - run: npm test
+      - run: npm run android:sync
+      - name: Prepare persistent release signature
+        env:
+          ANDROID_SIGNING_PASSWORD: ${{ secrets.ANDROID_SIGNING_PASSWORD }}
+        run: |
+          set -euo pipefail
+          test -n "$ANDROID_SIGNING_PASSWORD"
+          mkdir -p release
+          if [ -f android/signing/release.keystore.gpg ]; then
+            printf '%s' "$ANDROID_SIGNING_PASSWORD" | gpg --batch --yes --pinentry-mode loopback --passphrase-fd 0 --output "$RUNNER_TEMP/merge-gpt.keystore" --decrypt android/signing/release.keystore.gpg
+            cp android/signing/release.keystore.gpg release/release.keystore.gpg
+          else
+            keytool -genkeypair -keystore "$RUNNER_TEMP/merge-gpt.keystore" -storetype PKCS12 -storepass:env ANDROID_SIGNING_PASSWORD -keypass:env ANDROID_SIGNING_PASSWORD -alias merge-gpt -keyalg RSA -keysize 3072 -validity 10000 -dname 'CN=Merge GPT, O=N1ght-Awe'
+            printf '%s' "$ANDROID_SIGNING_PASSWORD" | gpg --batch --yes --pinentry-mode loopback --passphrase-fd 0 --symmetric --cipher-algo AES256 --output release/release.keystore.gpg "$RUNNER_TEMP/merge-gpt.keystore"
+          fi
+      - name: Build and verify signed APK
+        env:
+          ANDROID_SIGNING_PASSWORD: ${{ secrets.ANDROID_SIGNING_PASSWORD }}
+        run: |
+          set -euo pipefail
+          export ANDROID_KEYSTORE_PATH="$RUNNER_TEMP/merge-gpt.keystore"
+          export ANDROID_VERSION_CODE=$((1000 + GITHUB_RUN_NUMBER))
+          cd android
+          bash gradlew --no-daemon assembleRelease
+          cd ..
+          cp android/app/build/outputs/apk/release/app-release.apk release/merge-big-gpt-android.apk
+          SIGNER=$(find "$ANDROID_HOME/build-tools" -name apksigner | sort -V | tail -1)
+          "$SIGNER" verify --verbose --print-certs release/merge-big-gpt-android.apk > release/signature.txt
+          sha256sum release/merge-big-gpt-android.apk > release/SHA256SUMS.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android-release
+          path: release/
+          retention-days: 30
+
+  offline-smoke:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: android-release
+          path: release
+      - name: Enable hardware acceleration
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: First launch and resume without network
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          profile: pixel_7
+          disable-animations: true
+          script: python3 scripts/android-smoke.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: android-offline-check
+          path: output/android-smoke/
+          retention-days: 30

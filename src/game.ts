@@ -2,6 +2,7 @@ import { GAME, LEVELS } from './config';
 import { PhysicsGame } from './physics';
 import { GameAudio } from './audio';
 import type { GameState, PhysicsEvent } from './types';
+import { readSavedRound, SAVE_KEY } from './save';
 
 interface Particle {
   x: number; y: number; vx: number; vy: number;
@@ -65,6 +66,7 @@ export class Game {
   private crownTime = 0;
   private crownPosition = { x: GAME.width / 2, y: GAME.height / 2 };
   private disposed = false;
+  private lastSave = 0;
   private resizeObserver: ResizeObserver;
   private abort = new AbortController();
   private reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
@@ -87,6 +89,8 @@ export class Game {
       return img;
     });
     this.physics = new PhysicsGame(event => this.handleEvent(event));
+    const saved = readSavedRound();
+    if (saved) this.physics.restore(saved);
     this.resizeObserver = new ResizeObserver(() => this.resize());
     this.resizeObserver.observe(canvas);
     this.resize();
@@ -108,6 +112,7 @@ export class Game {
     this.keys.clear();
     this.activePointer = null;
     this.accumulator = 0;
+    this.saveRound();
     this.notify();
   }
 
@@ -120,6 +125,7 @@ export class Game {
 
   restart() {
     this.physics.reset();
+    this.saveRound();
     this.particles.length = 0;
     this.bursts.length = 0;
     this.pieceMotions.clear();
@@ -140,6 +146,7 @@ export class Game {
   }
 
   destroy() {
+    this.saveRound();
     this.disposed = true;
     cancelAnimationFrame(this.frame);
     this.resizeObserver.disconnect();
@@ -164,6 +171,15 @@ export class Game {
     this.ctx.setTransform(this.canvas.width / GAME.width, 0, 0, this.canvas.height / GAME.height, 0, 0);
     this.background ??= this.createBackground();
     this.draw();
+  }
+
+  private saveRound(): void {
+    try {
+      const saved = this.physics.save();
+      if (saved) localStorage.setItem(SAVE_KEY, JSON.stringify(saved));
+      else localStorage.removeItem(SAVE_KEY);
+    } catch { /* Gameplay remains available if storage is full or disabled. */ }
+    this.lastSave = performance.now();
   }
 
   private bindInput() {
@@ -229,6 +245,7 @@ export class Game {
     document.addEventListener('visibilitychange', () => {
       if (document.hidden) this.pause();
     }, opts);
+    window.addEventListener('pagehide', () => this.saveRound(), opts);
     window.addEventListener('storage', event => {
       if (event.key === BEST_KEY) {
         this.best = Math.max(this.best, loadBest());
@@ -279,7 +296,7 @@ export class Game {
         this.emitParticles(GAME.width / 2, 60, '#e8b6ce', 44, 4);
       }
     }
-    if (event.type === 'gameover') this.audio.gameover();
+    if (event.type === 'gameover') { this.audio.gameover(); this.saveRound(); }
     this.onEvent(event);
   }
 
@@ -332,6 +349,7 @@ export class Game {
     }
     this.notify();
     this.draw();
+    if (this.physics.snapshot().status === 'playing' && time - this.lastSave >= 1000) this.saveRound();
     this.frame = requestAnimationFrame(nextTime => this.tick(nextTime));
   }
 

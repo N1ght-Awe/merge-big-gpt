@@ -2,6 +2,7 @@ import Matter from 'matter-js';
 import type { Engine, IEventCollision } from 'matter-js';
 import { GAME, LEVELS } from './config';
 import type { GamePiece, GameStatus, PhysicsEvent, PhysicsState } from './types';
+import { isSavedRound, type SavedRound } from './save';
 
 const { Bodies, Body: MatterBody, Composite, Engine: MatterEngine, Events } = Matter;
 const FIXED_STEP = 1000 / 60;
@@ -70,6 +71,51 @@ export class PhysicsGame {
   aim(x: number): void {
     if (!Number.isFinite(x) || this.destroyed) return;
     this.aimX = this.clampX(x, this.currentLevel);
+  }
+
+  save(): SavedRound | null {
+    if (this.destroyed || this.status === 'gameover' || !this.pieces.size) return null;
+    return {
+      version: 1, score: this.score, currentLevel: this.currentLevel, nextLevel: this.nextLevel,
+      maxLevel: this.maxLevel, drops: this.drops, merges: this.merges, combo: this.combo,
+      time: this.time, aimX: this.aimX, crowned: this.crowned,
+      dropAge: Number.isFinite(this.lastDrop) ? this.time - this.lastDrop : null,
+      mergeAge: Number.isFinite(this.lastMerge) ? this.time - this.lastMerge : null,
+      pieces: [...this.pieces.values()].map(({ body, level, bornAt, overflowEligible }) => ({
+        level, bornAt, overflowEligible, x: body.position.x, y: body.position.y,
+        vx: body.velocity.x, vy: body.velocity.y, angle: body.angle, angularVelocity: body.angularVelocity,
+      })),
+    };
+  }
+
+  restore(value: unknown): boolean {
+    if (this.destroyed || !isSavedRound(value)) return false;
+    this.reset();
+    this.time = value.time;
+    this.engine.timing.timestamp = value.time;
+    for (const saved of value.pieces) {
+      const piece = this.spawn(saved.level, saved.x, saved.y);
+      MatterBody.setVelocity(piece.body, { x: saved.vx, y: saved.vy });
+      MatterBody.setAngle(piece.body, saved.angle);
+      MatterBody.setAngularVelocity(piece.body, saved.angularVelocity);
+      piece.bornAt = saved.bornAt;
+      piece.overflowEligible = saved.overflowEligible;
+    }
+    this.score = value.score;
+    this.currentLevel = value.currentLevel;
+    this.nextLevel = value.nextLevel;
+    this.maxLevel = value.maxLevel;
+    this.drops = value.drops;
+    this.merges = value.merges;
+    this.combo = value.combo;
+    this.aimX = this.clampX(value.aimX, value.currentLevel);
+    this.lastDrop = value.dropAge === null ? -Infinity : this.time - value.dropAge;
+    this.lastMerge = value.mergeAge === null ? -Infinity : this.time - value.mergeAge;
+    this.crowned = value.crowned;
+    // Recreating bodies is silent; a previously earned crown must not replay.
+    this.pendingEvents.length = 0;
+    this.status = 'paused';
+    return true;
   }
 
   drop(): boolean {

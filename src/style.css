@@ -326,3 +326,7 @@ dialog[open] { animation: card-in .22s ease-out; }
   *, *::before, *::after { animation: none !important; transition: none !important; }
 }
 
+
+/* Keep the game away from Android cutouts and gesture navigation. */
+body { padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); }
+@media (max-width: 700px) { .play-column { width: min(100%, max(248px, calc((100svh - 278px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)) * .7096774194))); } }

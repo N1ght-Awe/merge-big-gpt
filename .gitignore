@@ -2,4 +2,7 @@ node_modules/
 dist/
 *.local
 output/
+.private/
+*.jks
+*.keystore
 .verify/
