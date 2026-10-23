@@ -37,6 +37,8 @@ def wait_node(label, name):
             close = next(n for n in root.iter('node') if n.get('resource-id') == 'android:id/aerr_close')
             tap(close)
             time.sleep(2)
+            if name == 'launcher-icon':
+                open_app_drawer()
             continue
         if any("isn't responding" in t for t in titles):
             raise AssertionError(f'Application ANR: {titles}')
@@ -53,6 +55,15 @@ def tap(node, x_ratio=0.5, y_ratio=0.5):
     adb('shell', 'input', 'tap', str(int(x1 + (x2 - x1) * x_ratio)), str(int(y1 + (y2 - y1) * y_ratio)))
 
 
+def open_app_drawer():
+    adb('shell', 'input', 'keyevent', 'KEYCODE_HOME')
+    time.sleep(2)
+    size = adb('shell', 'wm', 'size')
+    width, height = map(int, re.findall(r'(\d+)x(\d+)', size)[-1])
+    adb('shell', 'input', 'swipe', str(width // 2), str(int(height * .9)),
+        str(width // 2), str(int(height * .3)), '400')
+
+
 try:
     adb('install', '-r', 'release/merge-big-gpt-android.apk')
     adb('shell', 'cmd', 'connectivity', 'airplane-mode', 'enable')
@@ -60,7 +71,11 @@ try:
     adb('shell', 'svc', 'data', 'disable')
     assert adb('shell', 'settings', 'get', 'global', 'airplane_mode_on').strip() == '1'
     adb('logcat', '-c')
-    adb('shell', 'am', 'start', '-n', PACKAGE + '/.MainActivity')
+    open_app_drawer()
+    launcher_icon = wait_node('合成大GPT', 'launcher-icon')
+    assert launcher_icon.get('package') == 'com.google.android.apps.nexuslauncher'
+    screen('launcher-icon')
+    tap(launcher_icon)
     canvas = wait_node('合成大GPT游戏画布', 'first-launch')
     time.sleep(3)
     screen('first-launch-offline')
@@ -81,6 +96,7 @@ try:
         'package': PACKAGE, 'airplaneMode': True, 'firstLaunchOffline': True,
         'dropAccepted': True, 'processDeathRestorePaused': True, 'resumeOffline': True,
         'launcherDialogsDismissed': launcher_dialogs,
+        'launchedFromAppIcon': True,
     }, indent=2), encoding='utf-8')
 finally:
     screen('last-frame')
