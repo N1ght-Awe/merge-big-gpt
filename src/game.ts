@@ -593,7 +593,7 @@ export class Game {
     ctx.font = '12px "Microsoft YaHei", sans-serif';
     ctx.textAlign = 'left';
     ctx.fillStyle = state.warning > 0 ? '#a74860' : '#867091';
-    ctx.fillText(state.warning > 0 ? `上下文快满啦 · ${Math.max(0.1, (1 - state.warning) * GAME.overflowGrace / 1000).toFixed(1)}s` : '上下文警戒线', 24, GAME.deadline - 10);
+    ctx.fillText(state.warning > 0 ? '整颗越线才判负' : '上下文警戒线', 24, GAME.deadline - 10);
     if (state.warning > 0) {
       ctx.fillStyle = `rgba(227, 129, 143, ${0.035 + state.warning * 0.07})`;
       ctx.fillRect(0, GAME.deadline, GAME.width, 60);

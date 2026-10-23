@@ -21,6 +21,7 @@ export interface PhysicsState {
   maxLevel: number;
   drops: number;
   merges: number;
+  /** Fraction of the most exposed eligible circle above the line; never a timer. */
   warning: number;
   canDrop: boolean;
   time: number;
@@ -34,8 +35,8 @@ export interface GamePiece {
   body: Body;
   level: number;
   bornAt: number;
-  entered: boolean;
-  overflowMs: number;
+  /** Has reached the play area or contacted an eligible piece in the stack. */
+  overflowEligible: boolean;
 }
 export type PhysicsEvent =
   | { type: 'merge'; level: number; x: number; y: number; combo: number; points: number }

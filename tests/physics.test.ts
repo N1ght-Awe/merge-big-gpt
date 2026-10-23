@@ -187,7 +187,7 @@ test('drop cooldown, aim clamps, preview advancement, and weighted level bounds'
   game.destroy();
 });
 
-test('pause freezes simulation, cooldown and loss timers; reset removes all old entities', () => {
+test('pause freezes simulation and cooldown; reset removes all old entities', () => {
   const events: PhysicsEvent[] = [];
   const game = new PhysicsGame((event) => events.push(event), () => 0);
   game.drop();
@@ -225,35 +225,33 @@ test('pause freezes simulation, cooldown and loss timers; reset removes all old 
 });
 
 test('normal new drops cross the danger line without false game over', () => {
-  const game = new PhysicsGame(() => {}, () => 0.99);
-  game.drop();
-  advance(game, GAME.entryGrace + GAME.overflowGrace + 500);
-  assert.equal(game.snapshot().status, 'playing');
-  assert.equal(game.snapshot().warning, 0);
-  assert.equal([...game.pieces.values()][0].entered, true);
-  game.destroy();
+  for (const value of [0, 0.6, 0.8, 0.99]) {
+    const game = new PhysicsGame(() => {}, () => value);
+    game.drop();
+    assert.equal([...game.pieces.values()][0].overflowEligible, false);
+    game.step(FRAME);
+    assert.equal(game.snapshot().status, 'playing');
+    advance(game, 5000);
+    assert.equal(game.snapshot().status, 'playing');
+    assert.equal(game.snapshot().warning, 0);
+    assert.equal([...game.pieces.values()][0].overflowEligible, true);
+    game.destroy();
+  }
 });
 
-test('an entry-blocked new piece receives grace but eventually loses even if never entered', () => {
+test('a new drop blocked above the line by the stack loses on contact, without a timer', () => {
   const events: PhysicsEvent[] = [];
   const game = new PhysicsGame((event) => events.push(event), () => 0);
-  const piece = game.spawn(0, 220, GAME.spawnY);
-  // Freeze this real Matter body to model a jammed drop that cannot move down.
-  Matter.Body.setStatic(piece.body, true);
-  advance(game, GAME.entryGrace - 20);
-  assert.equal(game.snapshot().status, 'playing');
-  assert.equal(game.snapshot().warning, 0);
+  const support = game.spawn(5, 220, 130);
+  Matter.Body.setStatic(support.body, true);
+  assert.ok(game.drop());
+  const piece = [...game.pieces.values()].find(p => p !== support)!;
+  assert.equal(piece.overflowEligible, false);
   advance(game, 1000);
-  assert.equal(game.snapshot().status, 'playing');
-  assert.ok(game.snapshot().warning > 0);
-  assert.equal(piece.entered, false);
-  const beforePause = game.snapshot();
-  game.pause();
-  advance(game, 10000);
-  assert.equal(game.snapshot().warning, beforePause.warning);
-  game.resume();
-  advance(game, GAME.overflowGrace);
   assert.equal(game.snapshot().status, 'gameover');
+  assert.ok(game.snapshot().time < 1000);
+  assert.equal(piece.overflowEligible, true);
+  assert.ok(piece.body.position.y + LEVELS[piece.level].radius < GAME.deadline);
   assert.equal(game.snapshot().warning, 1);
   assert.equal(game.drop(), false);
   game.resume();
@@ -263,45 +261,106 @@ test('an entry-blocked new piece receives grace but eventually loses even if nev
   game.destroy();
 });
 
-test('moving an overflowing entered piece back below the line resets its continuous countdown', () => {
+test('partial overflow is safe indefinitely at every level, including exact bottom tangency', () => {
+  for (const level of LEVELS.keys()) {
+    const game = new PhysicsGame();
+    const r = LEVELS[level].radius;
+    const piece = game.spawn(level, 220, GAME.deadline + r);
+    Matter.Body.setStatic(piece.body, true);
+    for (const y of [GAME.deadline, GAME.deadline - r + 1, GAME.deadline - r]) {
+      Matter.Body.setPosition(piece.body, { x: 220, y });
+      advance(game, 5000);
+      assert.equal(game.snapshot().status, 'playing', `level=${level}, y=${y}`);
+      assert.ok(game.snapshot().warning > 0);
+    }
+    // Even a small strictly complete crossing loses on the next physics step.
+    Matter.Body.setPosition(piece.body, { x: 220, y: GAME.deadline - r - 0.01 });
+    game.step(FRAME);
+    assert.equal(game.snapshot().status, 'gameover', `level=${level}`);
+    assertWorldSync(game);
+    game.destroy();
+  }
+});
+
+test('warning follows geometry and recedes immediately when the circle moves down', () => {
   const game = new PhysicsGame();
   const r = LEVELS[0].radius;
   const piece = game.spawn(0, 220, GAME.deadline + r + 20);
   Matter.Body.setStatic(piece.body, true);
-  assert.equal(piece.entered, true);
-  Matter.Body.setPosition(piece.body, { x: 220, y: GAME.deadline + r - 10 });
-  advance(game, GAME.overflowGrace - 200);
+  assert.equal(piece.overflowEligible, true);
+  Matter.Body.setPosition(piece.body, { x: 220, y: GAME.deadline });
+  game.step(FRAME);
   assert.equal(game.snapshot().status, 'playing');
-  assert.ok(game.snapshot().warning > 0.8);
+  assert.equal(game.snapshot().warning, 0.5);
+  advance(game, 10000);
+  assert.equal(game.snapshot().warning, 0.5, 'waiting cannot increase danger');
   Matter.Body.setPosition(piece.body, { x: 220, y: GAME.deadline + r + 20 });
   game.step(FRAME);
   assert.equal(game.snapshot().warning, 0);
-  assert.equal(piece.overflowMs, 0);
-  Matter.Body.setPosition(piece.body, { x: 220, y: GAME.deadline + r - 10 });
-  advance(game, 500);
-  assert.equal(game.snapshot().status, 'playing');
-  assert.ok(game.snapshot().warning < 0.3);
-  advance(game, GAME.overflowGrace);
-  assert.equal(game.snapshot().status, 'gameover');
   game.destroy();
 });
 
-test('a merge in an overflowing stack inherits danger instead of restarting entry grace', () => {
+test('two airborne newcomers or a side wall cannot arm entry failure', () => {
   const game = new PhysicsGame();
   game.engine.gravity.y = 0;
-  const radius = LEVELS[0].radius;
-  const a = game.spawn(0, 180, 70);
-  const b = game.spawn(0, 260, 70);
-  a.entered = true;
-  b.entered = true;
-  advance(game, GAME.overflowGrace - 200);
+  const a = game.spawn(0, 180, GAME.spawnY);
+  const b = game.spawn(1, 222, GAME.spawnY);
+  const wall = game.spawn(2, GAME.wall + LEVELS[2].radius, GAME.spawnY);
+  Matter.Body.setPosition(wall.body, { x: GAME.wall + LEVELS[2].radius - 1, y: GAME.spawnY });
+  advance(game, 6000);
   assert.equal(game.snapshot().status, 'playing');
-  Matter.Body.setPosition(b.body, { x: 180 + radius * 1.8, y: 70 });
+  assert.ok([a, b, wall].every(piece => !piece.overflowEligible));
+  assert.equal(game.snapshot().warning, 0);
+  game.destroy();
+});
+
+test('a contact chain propagates stack eligibility in the same physics step', () => {
+  const game = new PhysicsGame();
+  game.engine.gravity.y = 0;
+  // Create the airborne end first to avoid relying on callback or body-ID order.
+  const top = game.spawn(2, 220, 0);
+  const middle = game.spawn(1, 220, 60);
+  const support = game.spawn(0, 220, 106);
+  Matter.Body.setStatic(support.body, true);
+  game.step(FRAME);
+  assert.ok(top.overflowEligible && middle.overflowEligible);
+  assert.equal(game.snapshot().status, 'gameover');
+  assertWorldSync(game);
+  game.destroy();
+});
+
+test('a same-step merge can rescue whole-crossed parents if the resulting circle reaches the line', () => {
+  const game = new PhysicsGame();
+  game.engine.gravity.y = 0;
+  const a = game.spawn(0, 200, 200);
+  const b = game.spawn(0, 236, 200);
+  Matter.Body.setPosition(a.body, { x: 200, y: 102 });
+  Matter.Body.setPosition(b.body, { x: 236, y: 102 });
   game.step(FRAME);
   assert.equal(game.snapshot().merges, 1);
-  assert.ok([...game.pieces.values()][0].overflowMs >= GAME.overflowGrace - 200);
-  advance(game, 250);
+  assert.equal(game.snapshot().status, 'playing');
+  const merged = [...game.pieces.values()][0];
+  assert.ok(merged.overflowEligible);
+  assert.ok(merged.body.position.y + LEVELS[merged.level].radius >= GAME.deadline);
+  assertWorldSync(game);
+  game.destroy();
+});
+
+test('a merged stack circle still wholly above the line loses once without renewed entry immunity', () => {
+  const events: PhysicsEvent[] = [];
+  const game = new PhysicsGame(event => events.push(event));
+  game.engine.gravity.y = 0;
+  const a = game.spawn(0, 200, 200);
+  const b = game.spawn(0, 236, 80);
+  Matter.Body.setPosition(a.body, { x: 200, y: 80 });
+  game.step(FRAME);
+  assert.equal(game.snapshot().merges, 1);
   assert.equal(game.snapshot().status, 'gameover');
+  assert.ok([...game.pieces.values()][0].overflowEligible);
+  assert.ok(!game.pieces.has(b.body.id));
+  assert.deepEqual(events.map(event => event.type), ['merge', 'gameover']);
+  advance(game, 5000);
+  assert.equal(events.filter(event => event.type === 'gameover').length, 1);
   assertWorldSync(game);
   game.destroy();
 });

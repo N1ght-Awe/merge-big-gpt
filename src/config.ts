@@ -25,8 +25,6 @@ export const GAME = {
   spawnY: 48,
   deadline: 126,
   dropCooldown: 500,
-  overflowGrace: 2400,
-  entryGrace: 1600,
   comboWindow: 1800,
 } as const;
 

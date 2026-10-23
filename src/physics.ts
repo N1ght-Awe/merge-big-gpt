@@ -5,7 +5,6 @@ import type { GamePiece, GameStatus, PhysicsEvent, PhysicsState } from './types'
 
 const { Bodies, Body: MatterBody, Composite, Engine: MatterEngine, Events } = Matter;
 const FIXED_STEP = 1000 / 60;
-const TOP_EPSILON = 2;
 
 /**
  * Owns both the authoritative game state and its Matter bodies.
@@ -32,6 +31,7 @@ export class PhysicsGame {
   private crowned = false;
   private destroyed = false;
   private pendingPairs = new Map<string, readonly [number, number]>();
+  private pendingContacts: Array<readonly [number, number]> = [];
   private pendingEvents: PhysicsEvent[] = [];
 
   constructor(
@@ -117,8 +117,7 @@ export class PhysicsGame {
       body,
       level,
       bornAt: this.time,
-      entered: body.position.y - radius >= GAME.deadline,
-      overflowMs: 0,
+      overflowEligible: body.position.y + radius >= GAME.deadline,
     };
     Composite.add(this.engine.world, body);
     this.pieces.set(body.id, piece);
@@ -139,10 +138,12 @@ export class PhysicsGame {
       const dt = Math.min(remaining, FIXED_STEP);
       this.time += dt;
       if (this.time - this.lastMerge > GAME.comboWindow) this.combo = 0;
+      this.pendingContacts.length = 0;
       MatterEngine.update(this.engine, dt);
+      this.updateOverflowEligibility();
       this.commitMerges();
       this.containPieces();
-      this.checkOverflow(dt);
+      this.checkOverflow();
       this.flushEvents();
       remaining -= dt;
     }
@@ -159,6 +160,7 @@ export class PhysicsGame {
   reset(): void {
     if (this.destroyed) return;
     this.pendingPairs.clear();
+    this.pendingContacts.length = 0;
     this.pendingEvents.length = 0;
     this.pieces.clear();
     Composite.clear(this.engine.world, false);
@@ -187,6 +189,7 @@ export class PhysicsGame {
     Events.off(this.engine, 'collisionStart', this.collectCollisions);
     Events.off(this.engine, 'collisionActive', this.collectCollisions);
     this.pendingPairs.clear();
+    this.pendingContacts.length = 0;
     this.pendingEvents.length = 0;
     this.pieces.clear();
     Composite.clear(this.engine.world, false);
@@ -199,13 +202,45 @@ export class PhysicsGame {
     for (const pair of event.pairs) {
       const first = this.pieces.get(pair.bodyA.id);
       const second = this.pieces.get(pair.bodyB.id);
-      if (!first || !second || first.level !== second.level
+      if (!first || !second) continue;
+      this.pendingContacts.push([first.body.id, second.body.id]);
+      if (first.level !== second.level
         || first.level === LEVELS.length - 1) continue;
       const a = Math.min(first.body.id, second.body.id);
       const b = Math.max(first.body.id, second.body.id);
       this.pendingPairs.set(`${a}:${b}`, [a, b]);
     }
   };
+
+  private updateOverflowEligibility(): void {
+    // Fresh drops start above the line. Arm them by geometry/contact, not age.
+    // Walls cannot arm a drop, and two airborne newcomers cannot arm each other.
+    const contacts = new Map<number, number[]>();
+    for (const [a, b] of this.pendingContacts) {
+      if (!contacts.has(a)) contacts.set(a, []);
+      if (!contacts.has(b)) contacts.set(b, []);
+      contacts.get(a)!.push(b);
+      contacts.get(b)!.push(a);
+    }
+    const eligible: number[] = [];
+    for (const piece of this.pieces.values()) {
+      if (piece.body.position.y + LEVELS[piece.level].radius >= GAME.deadline) {
+        piece.overflowEligible = true;
+      }
+      if (piece.overflowEligible) eligible.push(piece.body.id);
+    }
+    // Traverse the contact graph so a blocked drop cannot gain permanent
+    // immunity, regardless of the order Matter reports simultaneous contacts.
+    for (let i = 0; i < eligible.length; i++) {
+      for (const id of contacts.get(eligible[i]) ?? []) {
+        const piece = this.pieces.get(id);
+        if (piece && !piece.overflowEligible) {
+          piece.overflowEligible = true;
+          eligible.push(id);
+        }
+      }
+    }
+  }
 
   private commitMerges(): void {
     // Sorted IDs make a three-way collision deterministic and independently
@@ -228,11 +263,10 @@ export class PhysicsGame {
       Composite.remove(this.engine.world, [a.body, b.body]);
       const merged = this.spawn(level, x, y);
       MatterBody.setVelocity(merged.body, velocity);
-      // A merge in an overflowing stack must not grant that stack a fresh
-      // entry grace period or erase an already-running danger countdown.
+      // Merging does not turn an existing stack piece back into a fresh drop.
+      // The resulting circle is checked after the complete merge transaction.
       merged.bornAt = Math.min(a.bornAt, b.bornAt);
-      merged.entered = a.entered || b.entered || merged.entered;
-      merged.overflowMs = Math.max(a.overflowMs, b.overflowMs);
+      merged.overflowEligible = a.overflowEligible || b.overflowEligible || merged.overflowEligible;
       this.combo = this.time - this.lastMerge <= GAME.comboWindow ? this.combo + 1 : 1;
       this.lastMerge = this.time;
       const base = LEVELS[level].score;
@@ -246,22 +280,17 @@ export class PhysicsGame {
     }
   }
 
-  private checkOverflow(dt: number): void {
+  private checkOverflow(): void {
     this.warning = 0;
     for (const piece of this.pieces.values()) {
-      const top = piece.body.position.y - LEVELS[piece.level].radius;
-      if (top >= GAME.deadline + TOP_EPSILON) {
-        piece.entered = true;
-        piece.overflowMs = 0;
-        continue;
-      }
-      if (!piece.entered && this.time - piece.bornAt < GAME.entryGrace) {
-        piece.overflowMs = 0;
-        continue;
-      }
-      piece.overflowMs += dt;
-      this.warning = Math.max(this.warning, Math.min(1, piece.overflowMs / GAME.overflowGrace));
-      if (piece.overflowMs + 0.00001 >= GAME.overflowGrace) {
+      if (!piece.overflowEligible) continue;
+      const radius = LEVELS[piece.level].radius;
+      const top = piece.body.position.y - radius;
+      const bottom = piece.body.position.y + radius;
+      this.warning = Math.max(this.warning, Math.max(0, Math.min(1, (GAME.deadline - top) / (2 * radius))));
+      // A tangent circle is still safe. Only a whole circle strictly above the
+      // line loses, immediately, with no entry or overflow countdown.
+      if (bottom < GAME.deadline) {
         this.status = 'gameover';
         this.warning = 1;
         this.pendingEvents.push({ type: 'gameover' });
