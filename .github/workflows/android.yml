@@ -43,6 +43,7 @@ jobs:
       - run: npm test
       - run: npm run android:sync
       - name: Prepare persistent release signature
+        id: signing
         env:
           ANDROID_SIGNING_PASSWORD: ${{ secrets.ANDROID_SIGNING_PASSWORD }}
         run: |
@@ -71,6 +72,7 @@ jobs:
           "$SIGNER" verify --verbose --print-certs release/merge-big-gpt-android.apk > release/signature.txt
           sha256sum release/merge-big-gpt-android.apk > release/SHA256SUMS.txt
       - uses: actions/upload-artifact@v4
+        if: always() && steps.signing.outcome == 'success'
         with:
           name: android-release
           path: release/
